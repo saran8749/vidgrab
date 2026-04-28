@@ -9,4 +9,4 @@ Disallow: /api/
 Disallow: /temp/
 
 # Sitemap
-Sitemap: https://vidgrab.onrender.com/sitemap.xml
+Sitemap: https://vidgrab-jq7u.onrender.com/sitemap.xml
