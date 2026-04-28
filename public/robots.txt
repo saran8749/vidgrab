@@ -1,0 +1,12 @@
+# VidGrab — robots.txt
+# Allow all search engines to crawl and index
+
+User-agent: *
+Allow: /
+
+# Disallow API endpoints from being indexed
+Disallow: /api/
+Disallow: /temp/
+
+# Sitemap
+Sitemap: https://vidgrab.onrender.com/sitemap.xml
