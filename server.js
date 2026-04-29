@@ -11,6 +11,12 @@ const rateLimit = require("express-rate-limit");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// ── Detect yt-dlp binary location ─────────────────────────────────────────────
+// Check if yt-dlp exists locally in the project directory (Render fallback)
+const localYtdlp = path.join(__dirname, "yt-dlp");
+const YTDLP_CMD = fs.existsSync(localYtdlp) ? localYtdlp : "yt-dlp";
+
+
 // ── Security Middleware ────────────────────────────────────────────────────────
 
 // Helmet — sets secure HTTP headers (XSS protection, no-sniff, HSTS, etc.)
@@ -120,13 +126,16 @@ app.get("/api/video", apiLimiter, (req, res) => {
 
   // Use execFile instead of exec — prevents shell injection entirely
   // execFile does NOT use a shell, so special characters are harmless
+  console.log(`[API] Fetching video info for: ${url}`);
   execFile(
-    "yt-dlp",
+    YTDLP_CMD,
     ["-J", "--no-warnings", "--no-exec", "--no-batch-file", url],
-    { maxBuffer: 1024 * 1024 * 10, timeout: 60000 },
+    { maxBuffer: 1024 * 1024 * 10, timeout: 120000 },
     (error, stdout, stderr) => {
       if (error) {
-        console.error("yt-dlp error:", stderr || error.message);
+        console.error("yt-dlp error code:", error.code);
+        console.error("yt-dlp stderr:", stderr);
+        console.error("yt-dlp error message:", error.message);
         return res.status(500).json({
           error:
             "Failed to fetch video info. Make sure the URL is valid and supported.",
@@ -335,7 +344,7 @@ app.get("/api/extract-audio", downloadLimiter, (req, res) => {
 
   // Use execFile — no shell injection possible
   execFile(
-    "yt-dlp",
+    YTDLP_CMD,
     ["-x", "--audio-format", "mp3", "--audio-quality", "0", "--no-exec", "--no-batch-file", "-o", outputPath, url],
     { maxBuffer: 1024 * 1024 * 10, timeout: 300000 },
     (error, stdout, stderr) => {
@@ -378,6 +387,18 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000); // Run every 5 minutes
 
+// ── Health check endpoint ────────────────────────────────────────────────────
+app.get("/api/health", (req, res) => {
+  execFile(YTDLP_CMD, ["--version"], { timeout: 10000 }, (error, stdout) => {
+    res.json({
+      status: "ok",
+      ytdlp: error ? "not available" : stdout.trim(),
+      node: process.version,
+      uptime: process.uptime(),
+    });
+  });
+});
+
 // ── Serve frontend ──────────────────────────────────────────────────────────
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
@@ -397,5 +418,15 @@ app.use((err, req, res, next) => {
 // ── Start server ────────────────────────────────────────────────────────────
 app.listen(PORT, () => {
   console.log(`\n🚀 VidGrab Server running at http://localhost:${PORT}`);
-  console.log(`🔒 Security: Helmet, Rate-Limiting, SSRF Protection enabled\n`);
+  console.log(`🔒 Security: Helmet, Rate-Limiting, SSRF Protection enabled`);
+
+  // Check if yt-dlp is available
+  execFile(YTDLP_CMD, ["--version"], { timeout: 10000 }, (error, stdout) => {
+    if (error) {
+      console.error("⚠️  yt-dlp is NOT available! Video fetching will fail.");
+      console.error("   Error:", error.message);
+    } else {
+      console.log(`✅ yt-dlp version: ${stdout.trim()}`);
+    }
+  });
 });

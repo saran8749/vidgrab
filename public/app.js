@@ -36,6 +36,41 @@ function setupEventListeners() {
     btnClear.classList.remove("visible");
     urlInput.focus();
   });
+
+  // Fetch Video button
+  const btnFetch = document.getElementById("btn-fetch");
+  if (btnFetch) {
+    btnFetch.addEventListener("click", () => fetchVideo());
+  }
+
+  // Retry button
+  const btnRetry = document.getElementById("btn-retry");
+  if (btnRetry) {
+    btnRetry.addEventListener("click", () => retryFetch());
+  }
+
+  // Extract Audio button
+  const btnExtractAudio = document.getElementById("btn-extract-audio");
+  if (btnExtractAudio) {
+    btnExtractAudio.addEventListener("click", () => extractAudio());
+  }
+
+  // Play overlay (video preview toggle)
+  const playOverlay = document.getElementById("play-overlay");
+  if (playOverlay) {
+    playOverlay.addEventListener("click", () => togglePreview());
+  }
+
+  // Close preview button
+  const btnClosePreview = document.getElementById("btn-close-preview");
+  if (btnClosePreview) {
+    btnClosePreview.addEventListener("click", () => togglePreview());
+  }
+
+  // FAQ accordion items
+  document.querySelectorAll(".faq-item").forEach((item) => {
+    item.querySelector(".faq-question")?.addEventListener("click", () => toggleFaq(item));
+  });
 }
 
 // ── Tab Switching ────────────────────────────────────────────────────────────
