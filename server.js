@@ -471,6 +471,40 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// ── Debug yt-dlp endpoint ───────────────────────────────────────────────────
+app.get("/api/debug-ytdlp", (req, res) => {
+  const url = req.query.url;
+  const client = req.query.client || "ios,android";
+  
+  if (!url) {
+    return res.status(400).json({ error: "No URL provided" });
+  }
+  
+  const spawnArgs = ["-J", "--no-warnings", "--no-exec", "--no-batch-file", "--extractor-args", `youtube:player-client=${client}`, url];
+  
+  execFile(
+    YTDLP_CMD,
+    spawnArgs,
+    { maxBuffer: 1024 * 1024 * 10, timeout: 60000 },
+    (error, stdout, stderr) => {
+      let title = null;
+      if (!error && stdout) {
+        try {
+          title = JSON.parse(stdout).title;
+        } catch (e) {}
+      }
+      res.json({
+        success: !error,
+        code: error ? error.code : 0,
+        message: error ? error.message : null,
+        stderr: stderr,
+        stdoutLength: stdout ? stdout.length : 0,
+        title: title
+      });
+    }
+  );
+});
+
 // ── Serve frontend ──────────────────────────────────────────────────────────
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
