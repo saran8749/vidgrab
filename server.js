@@ -139,6 +139,8 @@ app.get("/api/video", apiLimiter, (req, res) => {
         return res.status(500).json({
           error:
             "Failed to fetch video info. Make sure the URL is valid and supported.",
+          details: error.message,
+          stderr: stderr
         });
       }
 
