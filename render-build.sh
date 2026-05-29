@@ -1,45 +1,38 @@
 #!/bin/bash
 # Render.com Build Script for VidGrab
-# Installs Node.js dependencies and yt-dlp
+# Installs Node.js dependencies, yt-dlp binary, and ffmpeg binary
 
 set -e
 
 echo "📦 Installing Node.js dependencies..."
 npm install
 
-echo "🎬 Installing yt-dlp..."
+echo "🎬 Installing yt-dlp binary locally..."
+# Download static Linux yt-dlp binary directly to project root (ensures persistence at runtime)
+curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ./yt-dlp
+chmod a+rx ./yt-dlp
 
-# Try pip first (most reliable on Render)
-if command -v pip3 &> /dev/null; then
-  echo "Using pip3 to install yt-dlp..."
-  pip3 install --upgrade yt-dlp
-elif command -v pip &> /dev/null; then
-  echo "Using pip to install yt-dlp..."
-  pip install --upgrade yt-dlp
-else
-  echo "⚠️ pip not found, downloading yt-dlp binary..."
-  # Download to project directory (always writable)
-  curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ./yt-dlp
-  chmod a+rx ./yt-dlp
-  
-  # Also try /usr/local/bin
-  cp ./yt-dlp /usr/local/bin/yt-dlp 2>/dev/null || true
-  
-  # Add current directory to PATH for runtime
-  export PATH="$PWD:$PATH"
-fi
+echo "🎙️ Installing ffmpeg binary locally..."
+# Download static Linux-x64 ffmpeg binary directly to project root
+curl -L https://github.com/eugeneware/ffmpeg-static/releases/download/b5.0.1/linux-x64 -o ./ffmpeg
+chmod a+rx ./ffmpeg
 
-# Verify installation
+# Verify installations
 echo ""
-echo "🔍 Verifying yt-dlp installation..."
-if command -v yt-dlp &> /dev/null; then
-  echo "✅ yt-dlp version: $(yt-dlp --version)"
-  echo "✅ yt-dlp location: $(which yt-dlp)"
-elif [ -f "./yt-dlp" ]; then
+echo "🔍 Verifying local installations..."
+if [ -f "./yt-dlp" ]; then
   echo "✅ yt-dlp version: $(./yt-dlp --version)"
   echo "✅ yt-dlp location: ./yt-dlp (local)"
 else
   echo "❌ yt-dlp installation FAILED!"
+  exit 1
+fi
+
+if [ -f "./ffmpeg" ]; then
+  echo "✅ ffmpeg is present locally"
+  chmod a+rx ./ffmpeg
+else
+  echo "❌ ffmpeg installation FAILED!"
   exit 1
 fi
 

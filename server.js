@@ -284,9 +284,15 @@ app.get("/api/download", downloadLimiter, (req, res) => {
       "-f", `${formatId}+bestaudio/best`,
       "--merge-output-format", "mp4",
       "-o", tempOutputPath,
-      "--no-warnings",
-      videoUrl
+      "--no-warnings"
     ];
+
+    const localFfmpeg = path.join(__dirname, "ffmpeg");
+    if (fs.existsSync(localFfmpeg)) {
+      spawnArgs.push("--ffmpeg-location", localFfmpeg);
+    }
+
+    spawnArgs.push(videoUrl);
 
     const child = execFile(
       YTDLP_CMD,
@@ -398,10 +404,17 @@ app.get("/api/extract-audio", downloadLimiter, (req, res) => {
     fs.mkdirSync(tempDir, { recursive: true });
   }
 
+  const spawnArgs = ["-x", "--audio-format", "mp3", "--audio-quality", "0", "--no-exec", "--no-batch-file"];
+  const localFfmpeg = path.join(__dirname, "ffmpeg");
+  if (fs.existsSync(localFfmpeg)) {
+    spawnArgs.push("--ffmpeg-location", localFfmpeg);
+  }
+  spawnArgs.push("-o", outputPath, url);
+
   // Use execFile — no shell injection possible
   execFile(
     YTDLP_CMD,
-    ["-x", "--audio-format", "mp3", "--audio-quality", "0", "--no-exec", "--no-batch-file", "-o", outputPath, url],
+    spawnArgs,
     { maxBuffer: 1024 * 1024 * 10, timeout: 300000 },
     (error, stdout, stderr) => {
       if (error) {
