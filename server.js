@@ -34,7 +34,7 @@ app.use(
         frameSrc: ["'none'"],
         objectSrc: ["'none'"],
         baseUri: ["'self'"],
-        formAction: ["'self'", "https://www.profitablecpmratenetwork.com"],
+        formAction: ["'self'"],
       },
     },
     crossOriginEmbedderPolicy: false, // Allow loading external fonts/icons
@@ -160,6 +160,7 @@ app.get("/api/video", apiLimiter, (req, res) => {
             if (!seenQualities.has(quality)) {
               seenQualities.add(quality);
               videoFormats.push({
+                format_id: f.format_id || null,
                 quality,
                 height: f.height,
                 ext: f.ext,
@@ -194,6 +195,7 @@ app.get("/api/video", apiLimiter, (req, res) => {
             if (!seenAudioBitrates.has(bitrate) && bitrate !== "unknown") {
               seenAudioBitrates.add(bitrate);
               audioFormats.push({
+                format_id: f.format_id || null,
                 bitrate,
                 ext: f.ext,
                 url: f.url,
@@ -232,15 +234,23 @@ app.get("/api/video", apiLimiter, (req, res) => {
 // ── API: Download file via proxy (with security checks) ─────────────────────
 app.get("/api/download", downloadLimiter, (req, res) => {
   const fileUrl = req.query.url;
+  const videoUrl = req.query.video_url;
+  const formatId = req.query.format_id;
   const filename = req.query.filename || "video";
   const ext = req.query.ext || "mp4";
+  const acodec = req.query.acodec;
+  const filesize = req.query.filesize;
 
-  if (!fileUrl) {
-    return res.status(400).json({ error: "No file URL provided" });
+  if (!fileUrl && !videoUrl) {
+    return res.status(400).json({ error: "No URL provided" });
   }
 
-  if (!isValidUrl(fileUrl)) {
+  if (fileUrl && !isValidUrl(fileUrl)) {
     return res.status(400).json({ error: "Invalid download URL" });
+  }
+
+  if (videoUrl && !isValidUrl(videoUrl)) {
+    return res.status(400).json({ error: "Invalid video URL" });
   }
 
   // Whitelist allowed extensions
@@ -253,71 +263,117 @@ app.get("/api/download", downloadLimiter, (req, res) => {
     .substring(0, 100)
     .trim() || "download";
 
-  res.setHeader(
-    "Content-Disposition",
-    `attachment; filename="${sanitizedFilename}.${safeExt}"`
-  );
-  res.setHeader("Content-Type", "application/octet-stream");
+  console.log(`[API] Download requested for: filename="${sanitizedFilename}.${safeExt}"`);
 
-  // Prevent caching of downloads
-  res.setHeader("Cache-Control", "no-store");
+  // 1. HIGH-QUALITY MERGING PATH:
+  // If videoUrl and formatId are present and acodec is 'none', it is a video-only format (like 1080p, 1440p, or 4K/2160p on YouTube)
+  // We must download the video-only stream, download the best audio stream, merge them via ffmpeg, and serve the result.
+  if (videoUrl && formatId && acodec === "none") {
+    console.log(`[API] Video-only format detected (${formatId}). Merging with best audio on server...`);
 
-  const protocol = fileUrl.startsWith("https") ? https : http;
+    // Ensure temp directory exists
+    const tempDir = path.join(__dirname, "temp");
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
 
-  const request = protocol
-    .get(fileUrl, { headers: { "User-Agent": "Mozilla/5.0" }, timeout: 30000 }, (fileRes) => {
-      if (
-        fileRes.statusCode >= 300 &&
-        fileRes.statusCode < 400 &&
-        fileRes.headers.location
-      ) {
-        const redirectUrl = fileRes.headers.location;
-        // Validate redirect URL too
-        if (!isValidUrl(redirectUrl)) {
-          return res.status(400).json({ error: "Unsafe redirect detected" });
+    const safeId = Date.now().toString(36) + Math.random().toString(36).substr(2, 6);
+    const tempOutputPath = path.join(tempDir, `merged_${safeId}.mp4`);
+
+    const spawnArgs = [
+      "-f", `${formatId}+bestaudio/best`,
+      "--merge-output-format", "mp4",
+      "-o", tempOutputPath,
+      "--no-warnings",
+      videoUrl
+    ];
+
+    const child = execFile(
+      YTDLP_CMD,
+      spawnArgs,
+      { maxBuffer: 1024 * 1024 * 10, timeout: 600000 },
+      (error, stdout, stderr) => {
+        if (error) {
+          console.error("[API] Merging error:", stderr || error.message);
+          // Clean up on error
+          try { fs.unlinkSync(tempOutputPath); } catch {}
+          if (!res.headersSent) {
+            return res.status(500).json({ error: "Failed to download and merge high-quality video and audio formats." });
+          }
+          return;
         }
-        const redirectProtocol = redirectUrl.startsWith("https") ? https : http;
-        redirectProtocol
-          .get(
-            redirectUrl,
-            { headers: { "User-Agent": "Mozilla/5.0" }, timeout: 30000 },
-            (redirectRes) => {
-              if (redirectRes.headers["content-length"]) {
-                res.setHeader(
-                  "Content-Length",
-                  redirectRes.headers["content-length"]
-                );
-              }
-              redirectRes.pipe(res);
-            }
-          )
-          .on("error", (err) => {
-            console.error("Redirect download error:", err.message);
-            if (!res.headersSent) {
-              res.status(500).json({ error: "Download failed" });
+
+        if (fs.existsSync(tempOutputPath)) {
+          // Serve the merged file using res.download (automatically handles headers and sends as attachment)
+          res.download(tempOutputPath, `${sanitizedFilename}.${safeExt}`, (err) => {
+            // Always clean up temp file after download ends (complete or aborted)
+            try {
+              fs.unlinkSync(tempOutputPath);
+            } catch (e) {}
+            if (err) {
+              console.error("[API] Error sending merged file:", err.message);
+            } else {
+              console.log("[API] High-quality merged file downloaded successfully.");
             }
           });
-      } else if (fileRes.statusCode === 200) {
-        if (fileRes.headers["content-length"]) {
-          res.setHeader("Content-Length", fileRes.headers["content-length"]);
+        } else {
+          if (!res.headersSent) {
+            res.status(500).json({ error: "Merged file not found on server." });
+          }
         }
-        fileRes.pipe(res);
-      } else {
-        res.status(fileRes.statusCode).json({ error: "Download source returned an error" });
       }
-    })
-    .on("error", (err) => {
-      console.error("Download error:", err.message);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Download failed" });
-      }
-    })
-    .on("timeout", () => {
-      request.destroy();
-      if (!res.headersSent) {
-        res.status(504).json({ error: "Download timed out" });
-      }
+    );
+
+    req.on("close", () => {
+      // If client terminates connection mid-merge, kill process and clean up file
+      console.log("[API] Client disconnected during high-quality merge. Killing process.");
+      try { child.kill(); } catch {}
+      setTimeout(() => {
+        try { fs.unlinkSync(tempOutputPath); } catch {}
+      }, 2000);
     });
+
+  } else {
+    // 2. STANDARD DIRECT-STREAMING PATH:
+    // For audio-only, muxed videos (up to 720p), or direct file links, stream stdout directly.
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${sanitizedFilename}.${safeExt}"`
+    );
+    res.setHeader("Content-Type", "application/octet-stream");
+    res.setHeader("Cache-Control", "no-store");
+    if (filesize) {
+      res.setHeader("Content-Length", filesize);
+    }
+
+    let spawnArgs = [];
+    if (videoUrl && formatId) {
+      console.log(`[API] Streaming video URL using format_id: ${formatId}`);
+      spawnArgs = ["-f", formatId, "-o", "-", "--no-warnings", videoUrl];
+    } else {
+      const targetUrl = fileUrl || videoUrl;
+      console.log(`[API] Streaming direct URL: ${targetUrl.substring(0, 80)}...`);
+      spawnArgs = ["-o", "-", "--no-warnings", targetUrl];
+    }
+
+    const { spawn } = require("child_process");
+    const child = spawn(YTDLP_CMD, spawnArgs);
+
+    child.stdout.pipe(res);
+
+    child.stderr.on("data", (data) => {
+      console.error("[yt-dlp download stderr]:", data.toString().trim());
+    });
+
+    child.on("close", (code) => {
+      console.log(`[API] Download stream closed with code: ${code}`);
+    });
+
+    req.on("close", () => {
+      console.log("[API] Download client disconnected, killing stream process.");
+      child.kill();
+    });
+  }
 });
 
 // ── API: Extract audio using yt-dlp ─────────────────────────────────────────

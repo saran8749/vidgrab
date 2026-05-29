@@ -10,7 +10,6 @@ document.addEventListener("DOMContentLoaded", () => {
   initScrollReveal();
   initRippleEffect();
   initTypingPlaceholder();
-  initAds();
 });
 
 function setupEventListeners() {
@@ -224,7 +223,7 @@ function renderResults(data) {
       const sizeStr = f.filesize ? formatFileSize(f.filesize) : "—";
       const card = document.createElement("div");
       card.className = "format-card";
-      card.onclick = () => downloadFormat({ url: f.url, quality: f.bitrate, ext: f.ext }, data.title);
+      card.onclick = () => downloadFormat({ format_id: f.format_id, url: f.url, quality: f.bitrate, ext: f.ext, filesize: f.filesize }, data.title);
       card.innerHTML = `
         <div class="format-info">
           <span class="format-quality" style="color:var(--accent-light);">${f.bitrate}</span>
@@ -250,7 +249,22 @@ function renderResults(data) {
 // ── Download ─────────────────────────────────────────────────────────────────
 function downloadFormat(format, title) {
   const safeTitle = (title || "video").replace(/[^a-zA-Z0-9\s\-_]/g, "").substring(0, 80);
-  const downloadUrl = `/api/download?url=${encodeURIComponent(format.url)}&filename=${encodeURIComponent(safeTitle + "_" + format.quality)}&ext=${format.ext || "mp4"}`;
+  const originalUrl = document.getElementById("url-input")?.value.trim() || "";
+  
+  let downloadUrl = `/api/download?url=${encodeURIComponent(format.url)}&filename=${encodeURIComponent(safeTitle + "_" + format.quality)}&ext=${format.ext || "mp4"}`;
+  
+  if (originalUrl) {
+    downloadUrl += `&video_url=${encodeURIComponent(originalUrl)}`;
+  }
+  if (format.format_id) {
+    downloadUrl += `&format_id=${encodeURIComponent(format.format_id)}`;
+  }
+  if (format.acodec) {
+    downloadUrl += `&acodec=${encodeURIComponent(format.acodec)}`;
+  }
+  if (format.filesize) {
+    downloadUrl += `&filesize=${encodeURIComponent(format.filesize)}`;
+  }
 
   const a = document.createElement("a");
   a.href = downloadUrl;
@@ -259,7 +273,12 @@ function downloadFormat(format, title) {
   a.click();
   document.body.removeChild(a);
 
-  showToast(`Downloading ${format.quality}...`);
+  // Show customized merging message if video-only format is being downloaded
+  if (format.acodec === "none") {
+    showToast("Merging high-quality streams on server... This may take up to 10 seconds.", "info");
+  } else {
+    showToast(`Downloading ${format.quality}...`);
+  }
 }
 
 // ── Extract Audio ────────────────────────────────────────────────────────────
@@ -551,64 +570,4 @@ function initTypingPlaceholder() {
   setTimeout(type, 800);
 }
 
-// ── Ad Management ────────────────────────────────────────────────────────────
-function initAds() {
-  // ── Close Top Banner Ad ──
-  const adCloseTop = document.getElementById("ad-close-top");
-  const adBannerTop = document.getElementById("ad-banner-top");
-  if (adCloseTop && adBannerTop) {
-    adCloseTop.addEventListener("click", () => {
-      adBannerTop.style.transition = "opacity 0.4s ease, max-height 0.4s ease, margin 0.3s ease";
-      adBannerTop.style.opacity = "0";
-      adBannerTop.style.maxHeight = "0";
-      adBannerTop.style.marginBottom = "0";
-      adBannerTop.style.overflow = "hidden";
-      setTimeout(() => adBannerTop.remove(), 500);
-    });
-  }
 
-  // ── Close Sticky Bottom Ad ──
-  const adStickyClose = document.getElementById("ad-sticky-close");
-  const adStickyBottom = document.getElementById("ad-sticky-bottom");
-  if (adStickyClose && adStickyBottom) {
-    adStickyClose.addEventListener("click", () => {
-      adStickyBottom.style.transition = "transform 0.5s cubic-bezier(.4,0,.2,1)";
-      adStickyBottom.style.transform = "translateY(100%)";
-      setTimeout(() => adStickyBottom.remove(), 600);
-    });
-  }
-
-  // ── Popup Ad (Interstitial) — show after delay on first visit ──
-  const popupOverlay = document.getElementById("ad-popup-overlay");
-  const popupClose = document.getElementById("ad-popup-close");
-
-  if (popupOverlay && !sessionStorage.getItem("vg_popup_shown")) {
-    setTimeout(() => {
-      popupOverlay.classList.remove("hidden");
-      lucide.createIcons();
-      sessionStorage.setItem("vg_popup_shown", "1");
-    }, 8000); // Show after 8 seconds
-  }
-
-  if (popupClose && popupOverlay) {
-    popupClose.addEventListener("click", () => {
-      popupOverlay.style.animation = "none";
-      popupOverlay.style.transition = "opacity 0.3s ease";
-      popupOverlay.style.opacity = "0";
-      setTimeout(() => {
-        popupOverlay.classList.add("hidden");
-        popupOverlay.style.opacity = "";
-      }, 350);
-    });
-
-    // Close on overlay click (outside the popup card)
-    popupOverlay.addEventListener("click", (e) => {
-      if (e.target === popupOverlay) {
-        popupClose.click();
-      }
-    });
-  }
-
-  // Re-initialize Lucide icons for ad elements
-  lucide.createIcons();
-}
