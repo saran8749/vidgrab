@@ -127,9 +127,17 @@ app.get("/api/video", apiLimiter, (req, res) => {
   // Use execFile instead of exec — prevents shell injection entirely
   // execFile does NOT use a shell, so special characters are harmless
   console.log(`[API] Fetching video info for: ${url}`);
+  const spawnArgs = ["-J", "--no-warnings", "--no-exec", "--no-batch-file", "--extractor-args", "youtube:player-client=ios,android"];
+  const cookiesPath = path.join(__dirname, "cookies.txt");
+  if (fs.existsSync(cookiesPath)) {
+    console.log("[API] Using cookies.txt for authentication");
+    spawnArgs.push("--cookies", cookiesPath);
+  }
+  spawnArgs.push(url);
+
   execFile(
     YTDLP_CMD,
-    ["-J", "--no-warnings", "--no-exec", "--no-batch-file", "--extractor-args", "youtube:player-client=ios,android", url],
+    spawnArgs,
     { maxBuffer: 1024 * 1024 * 10, timeout: 120000 },
     (error, stdout, stderr) => {
       if (error) {
@@ -290,6 +298,11 @@ app.get("/api/download", downloadLimiter, (req, res) => {
       "--extractor-args", "youtube:player-client=ios,android"
     ];
 
+    const cookiesPath = path.join(__dirname, "cookies.txt");
+    if (fs.existsSync(cookiesPath)) {
+      spawnArgs.push("--cookies", cookiesPath);
+    }
+
     const localFfmpeg = path.join(__dirname, "ffmpeg");
     if (fs.existsSync(localFfmpeg)) {
       spawnArgs.push("--ffmpeg-location", localFfmpeg);
@@ -356,13 +369,23 @@ app.get("/api/download", downloadLimiter, (req, res) => {
     }
 
     let spawnArgs = [];
+    const cookiesPath = path.join(__dirname, "cookies.txt");
+
     if (videoUrl && formatId) {
       console.log(`[API] Streaming video URL using format_id: ${formatId}`);
-      spawnArgs = ["-f", formatId, "-o", "-", "--no-warnings", "--extractor-args", "youtube:player-client=ios,android", videoUrl];
+      spawnArgs = ["-f", formatId, "-o", "-", "--no-warnings", "--extractor-args", "youtube:player-client=ios,android"];
+      if (fs.existsSync(cookiesPath)) {
+        spawnArgs.push("--cookies", cookiesPath);
+      }
+      spawnArgs.push(videoUrl);
     } else {
       const targetUrl = fileUrl || videoUrl;
       console.log(`[API] Streaming direct URL: ${targetUrl.substring(0, 80)}...`);
-      spawnArgs = ["-o", "-", "--no-warnings", "--extractor-args", "youtube:player-client=ios,android", targetUrl];
+      spawnArgs = ["-o", "-", "--no-warnings", "--extractor-args", "youtube:player-client=ios,android"];
+      if (fs.existsSync(cookiesPath)) {
+        spawnArgs.push("--cookies", cookiesPath);
+      }
+      spawnArgs.push(targetUrl);
     }
 
     const { spawn } = require("child_process");
@@ -408,6 +431,10 @@ app.get("/api/extract-audio", downloadLimiter, (req, res) => {
   }
 
   const spawnArgs = ["-x", "--audio-format", "mp3", "--audio-quality", "0", "--no-exec", "--no-batch-file", "--extractor-args", "youtube:player-client=ios,android"];
+  const cookiesPath = path.join(__dirname, "cookies.txt");
+  if (fs.existsSync(cookiesPath)) {
+    spawnArgs.push("--cookies", cookiesPath);
+  }
   const localFfmpeg = path.join(__dirname, "ffmpeg");
   if (fs.existsSync(localFfmpeg)) {
     spawnArgs.push("--ffmpeg-location", localFfmpeg);
@@ -480,7 +507,12 @@ app.get("/api/debug-ytdlp", (req, res) => {
     return res.status(400).json({ error: "No URL provided" });
   }
   
-  const spawnArgs = ["-J", "--no-warnings", "--no-exec", "--no-batch-file", "--extractor-args", `youtube:player-client=${client}`, url];
+  const spawnArgs = ["-J", "--no-warnings", "--no-exec", "--no-batch-file", "--extractor-args", `youtube:player-client=${client}`];
+  const cookiesPath = path.join(__dirname, "cookies.txt");
+  if (fs.existsSync(cookiesPath)) {
+    spawnArgs.push("--cookies", cookiesPath);
+  }
+  spawnArgs.push(url);
   
   execFile(
     YTDLP_CMD,
