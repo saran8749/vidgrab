@@ -129,7 +129,7 @@ app.get("/api/video", apiLimiter, (req, res) => {
   console.log(`[API] Fetching video info for: ${url}`);
   execFile(
     YTDLP_CMD,
-    ["-J", "--no-warnings", "--no-exec", "--no-batch-file", url],
+    ["-J", "--no-warnings", "--no-exec", "--no-batch-file", "--extractor-args", "youtube:player-client=ios,android", url],
     { maxBuffer: 1024 * 1024 * 10, timeout: 120000 },
     (error, stdout, stderr) => {
       if (error) {
@@ -284,7 +284,8 @@ app.get("/api/download", downloadLimiter, (req, res) => {
       "-f", `${formatId}+bestaudio/best`,
       "--merge-output-format", "mp4",
       "-o", tempOutputPath,
-      "--no-warnings"
+      "--no-warnings",
+      "--extractor-args", "youtube:player-client=ios,android"
     ];
 
     const localFfmpeg = path.join(__dirname, "ffmpeg");
@@ -355,11 +356,11 @@ app.get("/api/download", downloadLimiter, (req, res) => {
     let spawnArgs = [];
     if (videoUrl && formatId) {
       console.log(`[API] Streaming video URL using format_id: ${formatId}`);
-      spawnArgs = ["-f", formatId, "-o", "-", "--no-warnings", videoUrl];
+      spawnArgs = ["-f", formatId, "-o", "-", "--no-warnings", "--extractor-args", "youtube:player-client=ios,android", videoUrl];
     } else {
       const targetUrl = fileUrl || videoUrl;
       console.log(`[API] Streaming direct URL: ${targetUrl.substring(0, 80)}...`);
-      spawnArgs = ["-o", "-", "--no-warnings", targetUrl];
+      spawnArgs = ["-o", "-", "--no-warnings", "--extractor-args", "youtube:player-client=ios,android", targetUrl];
     }
 
     const { spawn } = require("child_process");
@@ -404,7 +405,7 @@ app.get("/api/extract-audio", downloadLimiter, (req, res) => {
     fs.mkdirSync(tempDir, { recursive: true });
   }
 
-  const spawnArgs = ["-x", "--audio-format", "mp3", "--audio-quality", "0", "--no-exec", "--no-batch-file"];
+  const spawnArgs = ["-x", "--audio-format", "mp3", "--audio-quality", "0", "--no-exec", "--no-batch-file", "--extractor-args", "youtube:player-client=ios,android"];
   const localFfmpeg = path.join(__dirname, "ffmpeg");
   if (fs.existsSync(localFfmpeg)) {
     spawnArgs.push("--ffmpeg-location", localFfmpeg);
