@@ -266,6 +266,10 @@ function downloadFormat(format, title) {
   if (format.filesize) {
     downloadUrl += `&filesize=${encodeURIComponent(format.filesize)}`;
   }
+  // Pass download strategy so backend uses the right proxy path
+  if (currentVideoData && currentVideoData.strategy) {
+    downloadUrl += `&strategy=${encodeURIComponent(currentVideoData.strategy)}`;
+  }
 
   const a = document.createElement("a");
   a.href = downloadUrl;
@@ -362,27 +366,7 @@ function showSection(section) {
 
 function showError(message) {
   const errMsgEl = document.getElementById("error-message");
-  
-  if (message.toLowerCase().includes("bot") || message.toLowerCase().includes("cookies")) {
-    errMsgEl.innerHTML = `
-      <div style="text-align: left; margin-top: 15px; font-size: 0.9rem; line-height: 1.5; color: var(--text-muted); background: rgba(239, 68, 68, 0.05); padding: 16px; border-radius: 12px; border: 1px dashed rgba(239, 68, 68, 0.2);">
-        <p style="font-weight: 600; margin-bottom: 8px; color: var(--primary); font-size: 1rem; display: flex; align-items: center; gap: 6px;">
-          <span style="font-size: 1.2rem;">⚠️</span> YouTube Bot Protection Active
-        </p>
-        <p style="margin-bottom: 10px;">YouTube has flagged the server's datacenter IP address. To fix this and unlock 100% of downloads, please follow these steps:</p>
-        <ol style="margin-left: 20px; margin-bottom: 10px; list-style-type: decimal; display: flex; flex-direction: column; gap: 6px;">
-          <li>Install the browser extension <strong>"Get cookies.txt LOCALLY"</strong> (Chrome/Firefox).</li>
-          <li>Log into a <strong>dummy/burner</strong> Google account on YouTube.</li>
-          <li>Open the extension on YouTube, export cookies in <strong>Netscape</strong> format, save them as <code>cookies.txt</code>, and push it to the root of your GitHub repository.</li>
-        </ol>
-        <p style="font-size: 0.8rem; color: var(--text-muted); border-top: 1px solid rgba(255, 255, 255, 0.08); padding-top: 8px; margin-top: 8px;">
-          Render will automatically rebuild and your site will be fully operational!
-        </p>
-      </div>
-    `;
-  } else {
-    errMsgEl.textContent = message;
-  }
+  errMsgEl.textContent = message;
   showSection("error");
 }
 

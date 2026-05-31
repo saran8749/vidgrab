@@ -1,15 +1,15 @@
 #!/bin/bash
 # Render.com Build Script for VidGrab
-# Installs Node.js dependencies, yt-dlp binary, and ffmpeg binary
+# Installs Node.js dependencies, yt-dlp binary (nightly), and ffmpeg binary
 
 set -e
 
 echo "📦 Installing Node.js dependencies..."
 npm install
 
-echo "🎬 Installing yt-dlp binary locally..."
-# Download static Linux yt-dlp binary directly to project root (ensures persistence at runtime)
-curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o ./yt-dlp
+echo "🎬 Installing yt-dlp NIGHTLY binary locally..."
+# Download nightly Linux yt-dlp binary — contains latest YouTube bypass patches
+curl -L https://github.com/yt-dlp/yt-dlp/releases/download/nightly/yt-dlp -o ./yt-dlp
 chmod a+rx ./yt-dlp
 
 echo "🎙️ Installing ffmpeg binary locally..."
@@ -22,7 +22,7 @@ echo ""
 echo "🔍 Verifying local installations..."
 if [ -f "./yt-dlp" ]; then
   echo "✅ yt-dlp version: $(./yt-dlp --version)"
-  echo "✅ yt-dlp location: ./yt-dlp (local)"
+  echo "✅ yt-dlp location: ./yt-dlp (local nightly)"
 else
   echo "❌ yt-dlp installation FAILED!"
   exit 1
